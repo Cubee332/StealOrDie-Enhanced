@@ -22,22 +22,60 @@
 ]]
 
 -- ============================ 加载 CDMUI ============================
+-- 和 Examination 完全一致的加载策略：
+--   1) 优先读本地 CDMUI.lua（改完立刻生效）
+--   2) 本地失败则走网络（GitHub raw + jsDelivr 双备份）
+--   3) 最后兜底用 getgenv().CDMUI
 local CDMUI
 do
-    local ok, res = pcall(function()
-        return loadstring(readfile("CDMUI.lua"))()
+    local errs = {}
+
+    -- 1) 本地文件
+    local ok1, res1 = pcall(function()
+        local src = readfile("CDMUI.lua")
+        return loadstring(src)()
     end)
-    if ok and res then
-        CDMUI = res
+    if ok1 and type(res1) == "table" and res1.Create then
+        CDMUI = res1
     else
-        CDMUI = getgenv().CDMUI
+        table.insert(errs, "local: " .. tostring(res1))
+    end
+
+    -- 2) 网络兜底
+    if not CDMUI then
+        local urls = {
+            "https://raw.githubusercontent.com/Cubee332/CDMUI/main/CDMUI.lua",
+            "https://cdn.jsdelivr.net/gh/Cubee332/CDMUI@main/CDMUI.lua",
+        }
+        for _, url in ipairs(urls) do
+            local ok, res = pcall(function()
+                local chunk = loadstring(game:HttpGet(url))
+                if not chunk then error("loadstring failed") end
+                return chunk()
+            end)
+            if ok and type(res) == "table" and res.Create then
+                CDMUI = res
+                break
+            end
+            table.insert(errs, url .. " -> " .. tostring(res))
+        end
+    end
+
+    -- 3) 已加载的实例
+    if not CDMUI then
+        local g = getgenv().CDMUI
+        if type(g) == "table" and g.Create then
+            CDMUI = g
+        end
+    end
+
+    if not CDMUI then
+        warn("[SOD] CDMUI 加载失败: " .. table.concat(errs, " | "))
+        return
     end
 end
-if not CDMUI then
-    warn("[SOD] CDMUI 加载失败")
-    return
-end
 getgenv().CDMUI = CDMUI
+print("[SOD] CDMUI v" .. tostring(CDMUI.Version) .. " 已加载")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -559,8 +597,10 @@ end
 
 -- ============================ UI ============================
 local win = CDMUI.Create({
+    -- Title     = 主UI里的大标题（游戏名字）
+    -- TopbarText = 左上角顶栏按钮的文字（固定「控制面板」）
     Title = "偷窃或死亡",
-    TopbarText = "SOD",
+    TopbarText = "控制面板",
     RealLoading = true,
     Tasks = {
         { Name = "读取物品配置", Run = function()
