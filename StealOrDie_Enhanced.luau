@@ -1,7 +1,7 @@
 --[[
     ============================================================
      StealOrDie-Enhanced  v1.0.0
-     Built on CDMUI v2.6.9
+     Built on CDMUI v2.9.0
 
      功能：
        · 物品透视      按稀有度配色 + 价值/重量/距离
@@ -20,6 +20,8 @@
        · 所有写入操作关闭时立即还原
     ============================================================
 ]]
+
+-- StealOrDie-Enhanced v1.0.0  初版：ESP + 属性 + 瞬间拾取 + 移动
 
 -- ============================ 加载 CDMUI ============================
 -- 和 Examination 完全一致的加载策略：
@@ -84,6 +86,18 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
+
+-- ============================ 版本 ============================
+local CURRENT_VERSION = "1.0.0"
+local VERSION_URL = "https://raw.githubusercontent.com/Cubee332/StealOrDie-Enhanced/main/StealOrDie_Enhanced.luau"
+
+-- 版本号转数字比较："1.0.0" -> 10000
+local function parseVersion(v)
+    if type(v) ~= "string" then return nil end
+    local a, b, c = v:match("^(%d+)%.(%d+)%.(%d+)$")
+    if not a then return nil end
+    return tonumber(a) * 10000 + tonumber(b) * 100 + tonumber(c)
+end
 
 -- ============================ 配置 ============================
 local GameConfig
@@ -729,6 +743,72 @@ tabInfo:Paragraph({
 })
 tabInfo:Paragraph({
     Text = "属性类修改（体力/负重/容量）服务器不重置，安全可用。\n移动类修改有检测风险，请谨慎使用。",
+})
+
+-- ============================ 关于脚本 ============================
+tabInfo:Section({ Name = "关于脚本" })
+
+-- 版本行：整行可点击，点一下就检测更新
+local verRow
+verRow = tabInfo:ClickableRow({
+    Name = "当前 v" .. CURRENT_VERSION,
+    Desc = "点击此行检测最新版本",
+    Arrow = true,
+    Callback = function()
+        if not verRow then return end
+        verRow.SetBusy(true)
+        verRow.Set("检测中…", "正在连接 GitHub…")
+
+        task.spawn(function()
+            local ok, result = pcall(function()
+                local src = game:HttpGet(VERSION_URL .. "?t=" .. tostring(os.time()))
+                return src:match("%-%-%s*StealOrDie%-Enhanced%s+v([%d%.]+)")
+            end)
+
+            verRow.SetBusy(false)
+
+            if not ok or not result then
+                verRow.Set("检测失败", "无法连接 GitHub，请检查网络")
+                return
+            end
+
+            local cur = parseVersion(CURRENT_VERSION)
+            local rem = parseVersion(result)
+
+            if not rem then
+                verRow.Set("检测失败", "版本号解析失败")
+                return
+            end
+
+            if rem > cur then
+                verRow.Set("发现新版本 v" .. result,
+                    "当前 v" .. CURRENT_VERSION .. "，请更新")
+            elseif rem == cur then
+                verRow.Set("已是最新版本", "当前 v" .. CURRENT_VERSION)
+            else
+                verRow.Set("本地版本较新",
+                    "当前 v" .. CURRENT_VERSION .. " / 线上 v" .. result)
+            end
+        end)
+    end,
+})
+
+-- 卸载行：整行可点击，二次确认后卸载
+local unloadRow
+unloadRow = tabInfo:ClickableRow({
+    Name = "卸载脚本",
+    Desc = "关闭所有功能并移除界面",
+    Arrow = true,
+    Callback = function()
+        if not unloadRow then return end
+        unloadRow.SetBusy(true)
+        unloadRow.Set("正在卸载…", "正在清理功能…")
+        task.delay(0.05, function()
+            if getgenv().SOD_Unload then
+                pcall(getgenv().SOD_Unload)
+            end
+        end)
+    end,
 })
 
 -- ============================ 主循环 ============================
